@@ -1,55 +1,58 @@
+/* eslint-disable @typescript-eslint/no-var-requires */
 import { Test, TestingModule } from '@nestjs/testing';
 import { CsvService } from './csv.service';
-import { HttpService } from '@nestjs/axios';
+import { getModelToken } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Data } from './schemas/data.schema';
-import { of, throwError } from 'rxjs';
+import { HttpService } from '@nestjs/axios';
 import { AxiosResponse } from 'axios';
-import { parse } from 'fast-csv';
 import { Readable } from 'stream';
-
-// Mock Model and HttpService
-const mockModel = () => ({
-  findOne: jest.fn(),
-  updateOne: jest.fn(),
-  save: jest.fn(),
-  distinct: jest.fn(),
-  find: jest.fn(),
-});
-
-const mockHttpService = () => ({
-  axiosRef: jest.fn(),
-});
+import { createReadStream } from 'fs';
+import { join } from 'path';
 
 describe('CsvService', () => {
   let service: CsvService;
-  let dataModel: Model<Data>;
+  let model: Model<Data>;
   let httpService: HttpService;
+
+  const mockDataModel = {
+    findOne: jest.fn(),
+    updateOne: jest.fn(),
+    save: jest.fn(),
+    distinct: jest.fn(),
+    find: jest.fn(),
+  };
+
+  const mockHttpService = {
+    axiosRef: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CsvService,
-        { provide: HttpService, useFactory: mockHttpService },
-        { provide: 'DataModel', useFactory: mockModel },
+        {
+          provide: getModelToken(Data.name),
+          useValue: mockDataModel,
+        },
+        {
+          provide: HttpService,
+          useValue: mockHttpService,
+        },
       ],
     }).compile();
 
     service = module.get<CsvService>(CsvService);
+    model = module.get<Model<Data>>(getModelToken(Data.name));
     httpService = module.get<HttpService>(HttpService);
-    dataModel = module.get<Model<Data>>('DataModel');
+
+    // Reset mocks before each test
+    jest.clearAllMocks();
   });
 
   describe('fetchAndParseCsv', () => {
-    it.skip('should successfully fetch and process CSV data', async () => {
-      const mockStream = new Readable({
-        read() {
-          this.push('locationid,FacilityType,FoodItems,Latitude,Longitude\n');
-          this.push('1,TypeA,FoodX,12.34,56.78\n');
-          this.push(null);
-        },
-      });
-
+    it.skip('should process data from HTTP stream', async () => {
+      const mockStream = Readable.from(['locationid,FoodItems\n123, Pizza\n']);
       const mockResponse: AxiosResponse = {
         data: mockStream,
         status: 200,
@@ -60,109 +63,142 @@ describe('CsvService', () => {
         },
       };
 
-      jest
-        .spyOn(httpService, 'axiosRef')
-        .mockResolvedValue(mockResponse as any);
+      // Mock HttpService to return the mock response
+      (mockHttpService.axiosRef as jest.Mock).mockResolvedValue(mockResponse);
 
-      jest.spyOn(dataModel, 'findOne').mockResolvedValue(null as any);
-      jest.spyOn(dataModel, 'bulkSave').mockResolvedValue({} as any);
-      await service.fetchAndParseCsv('http://example.com/file.csv');
+      // Mock the Data Model methods
+      mockDataModel.findOne.mockResolvedValue(null);
+      mockDataModel.save.mockResolvedValue(null);
 
-      expect(httpService.axiosRef).toHaveBeenCalledWith({
-        url: 'http://example.com/file.csv',
-        method: 'GET',
-        responseType: 'stream',
-      });
-      expect(dataModel.bulkSave).toHaveBeenCalled();
-    });
+      // Ensure that the fetchAndParseCsv method processes the stream
+      await service.fetchAndParseCsv('http://example.com/csv');
 
-    it.skip('should fall back to local file on error', async () => {
-      jest
-        .spyOn(httpService, 'axiosRef')
-        .mockRejectedValue(new Error('Network Error'));
-
-      jest.spyOn(dataModel, 'findOne').mockResolvedValue(null as any);
-      jest.spyOn(dataModel, 'bulkSave').mockResolvedValue({} as any);
-
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      jest.spyOn(require('fs'), 'createReadStream').mockReturnValue(
-        new Readable({
-          read() {
-            this.push('locationid,FacilityType,FoodItems,Latitude,Longitude\n');
-            this.push('1,TypeA,FoodX,12.34,56.78\n');
-            this.push(null);
-          },
+      // Verify that save was called with the expected arguments
+      expect(mockDataModel.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          locationid: '123',
+          FoodItems: 'Pizza',
         }),
       );
+      // Ensure axiosRef was called with the correct URL
+      expect(mockHttpService.axiosRef).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: 'http://example.com/csv',
+          method: 'GET',
+          responseType: 'stream',
+        }),
+      );
+    });
 
-      await service.fetchAndParseCsv('http://example.com/file.csv');
+    it.skip('should fall back to local file if HTTP request fails', async () => {
+      const mockStream = Readable.from(['locationid,FoodItems\n123, Pizza\n']);
 
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // Mock HTTP request to fail
+      (mockHttpService.axiosRef as jest.Mock).mockRejectedValue(
+        new Error('HTTP error'),
+      );
+
+      // Mock the file read stream
+      jest
+        .spyOn(require('fs'), 'createReadStream')
+        .mockReturnValue(mockStream as any);
+
+      // Mock the Data Model methods
+      mockDataModel.findOne.mockResolvedValue(null);
+      mockDataModel.save.mockResolvedValue(null);
+
+      // Ensure the fallback mechanism works
+      await service.fetchAndParseCsv('http://example.com/csv');
+
+      // Verify the local file stream was used
       expect(require('fs').createReadStream).toHaveBeenCalledWith(
         expect.stringContaining('local.csv'),
       );
-      expect(dataModel.bulkSave).toHaveBeenCalled();
+      // Verify the data was saved
+      expect(mockDataModel.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          locationid: '123',
+          FoodItems: 'Pizza',
+        }),
+      );
     });
   });
 
   describe('getUniqueFacilityTypes', () => {
-    it.skip('should return unique facility types sorted', async () => {
-      jest
-        .spyOn(dataModel, 'distinct')
-        .mockResolvedValue(['TypeA', 'TypeB'] as any);
+    it.skip('should return sorted unique facility types', async () => {
+      // Mock distinct to return an array
+      mockDataModel.distinct.mockResolvedValue(['Food Truck', 'Restaurant']);
 
       const result = await service.getUniqueFacilityTypes();
 
-      expect(result).toEqual(['TypeA', 'TypeB']);
-      expect(dataModel).toHaveBeenCalledWith('FacilityType');
+      expect(result).toEqual(['Food Truck', 'Restaurant']);
+      expect(mockDataModel.distinct).toHaveBeenCalledWith('FacilityType');
     });
   });
 
   describe('filterFoodItemsByLetter', () => {
-    it.skip('should return food items filtered by letter', async () => {
-      jest
-        .spyOn(dataModel, 'find')
-        .mockResolvedValue([{ FoodItems: 'FoodX' }] as any);
+    it.skip('should return filtered food items', async () => {
+      const mockQuery = {
+        sort: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue([{ FoodItems: 'Pizza' }]),
+      };
 
-      const result = await service.filterFoodItemsByLetter('X');
+      mockDataModel.find.mockReturnValue(mockQuery);
 
-      expect(result).toEqual([{ FoodItems: 'FoodX' }]);
-      expect(dataModel.find).toHaveBeenCalledWith({
-        FoodItems: { $regex: new RegExp('X', 'i') },
+      const result = await service.filterFoodItemsByLetter('Pizza');
+
+      expect(result).toEqual([{ FoodItems: 'Pizza' }]);
+      expect(mockDataModel.find).toHaveBeenCalledWith({
+        FoodItems: { $regex: 'Pizza', $options: 'i' },
       });
+      expect(mockQuery.sort).toHaveBeenCalledWith({ FoodItems: 1 });
     });
   });
 
   describe('findNearbyFoodTrucks', () => {
-    it.skip('should return nearby food trucks sorted by distance', async () => {
-      jest.spyOn(dataModel, 'find').mockResolvedValue([
-        {
-          Latitude: '12.34',
-          Longitude: '56.78',
-          FacilityType: 'TypeA',
-          FoodItems: 'FoodX',
-        } as any,
-      ]);
+    it.skip('should return sorted nearby food trucks', async () => {
+      const mockData = [
+        { Latitude: '10', Longitude: '10', FoodItems: 'Pizza' },
+        { Latitude: '20', Longitude: '20', FoodItems: 'Burger' },
+      ];
+      const mockQuery = {
+        exec: jest.fn().mockResolvedValue(mockData),
+      };
 
-      jest.spyOn(service, 'calculateDistance').mockReturnValue(5);
+      mockDataModel.find.mockReturnValue(mockQuery);
 
-      const result = await service.findNearbyFoodTrucks(
-        12.34,
-        56.78,
-        'TypeA',
-        'FoodX',
-        10,
+      jest
+        .spyOn(service, 'calculateDistance')
+        .mockImplementation((lat1, lon1, lat2, lon2) => {
+          return Math.sqrt(Math.pow(lat2 - lat1, 2) + Math.pow(lon2 - lon1, 2));
+        });
+
+      const result = await service.findNearbyFoodTrucks(0, 0);
+
+      const expected = [
+        { ...mockData[0], distance: Math.sqrt(10 * 10 + 10 * 10) },
+        { ...mockData[1], distance: Math.sqrt(20 * 20 + 20 * 20) },
+      ];
+
+      expect(result).toEqual(expected.sort((a, b) => a.distance - b.distance));
+      expect(mockDataModel.find).toHaveBeenCalledWith({});
+    });
+  });
+
+  describe('calculateDistance', () => {
+    it.skip('should correctly calculate distance', () => {
+      const lat1 = 0;
+      const lon1 = 0;
+      const lat2 = 10;
+      const lon2 = 10;
+
+      const expectedDistance = Math.sqrt(
+        Math.pow(lat2 - lat1, 2) + Math.pow(lon2 - lon1, 2),
       );
 
-      expect(result).toEqual([
-        {
-          Latitude: '12.34',
-          Longitude: '56.78',
-          FacilityType: 'TypeA',
-          FoodItems: 'FoodX',
-          distance: 5,
-        },
-      ]);
+      const distance = service.calculateDistance(lat1, lon1, lat2, lon2);
+
+      expect(distance).toBeCloseTo(expectedDistance, 2); // Adjust precision if needed
     });
   });
 });
