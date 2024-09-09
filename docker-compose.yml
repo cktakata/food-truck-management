@@ -1,0 +1,34 @@
+version: '3'
+services:
+  ft-mongo:
+    image: mongo:latest
+    container_name: ft-mongo
+    environment:
+      - MONGO_INITDB_DATABASE=nest
+    volumes:
+      - mongo-data:/data/db
+      - ./mongo-seed:/docker-entrypoint-initdb.d
+    ports:
+      - '27017:27017'
+    networks:
+      - ft_internal
+  ft-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ft-app
+    ports:
+      - "3000:3000"
+    depends_on:
+      - ft-mongo
+    environment:
+      - MONGO_URI=mongodb://ft-mongo:27017
+      - COLLECTION_NAME=nest
+    networks:
+      - ft_internal
+volumes:
+  mongo-data:
+networks:
+  ft_internal:
+    driver: 
+      bridge
