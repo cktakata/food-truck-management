@@ -43,6 +43,11 @@ localhost:3000/api
 
 To see the swagger documentation
 
+## Unit tests
+```sh
+npm run test:cov
+```
+
 ## License
 
 MIT
