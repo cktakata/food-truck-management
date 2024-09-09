@@ -42,19 +42,21 @@ export class CsvService {
         const existingData = await this.dataModel
           .findOne({ locationid: row.locationid })
           .exec();
-        if (existingData) {
-          const isDifferent = Object.keys(row).some(
-            (key) => row[key] !== existingData[key],
-          );
-          if (isDifferent) {
-            await this.dataModel
-              .updateOne({ locationid: row.locationid }, row)
-              .exec();
+        if (row.status === 'APPROVED') {
+          if (existingData) {
+            const isDifferent = Object.keys(row).some(
+              (key) => row[key] !== existingData[key],
+            );
+            if (isDifferent) {
+              await this.dataModel
+                .updateOne({ locationid: row.locationid }, row)
+                .exec();
+            }
+          } else {
+            const newData = new this.dataModel(row);
+            await newData.save();
+            console.log(`New data with locationid ${row.locationid} saved`);
           }
-        } else {
-          const newData = new this.dataModel(row);
-          await newData.save();
-          console.log(`New data with locationid ${row.locationid} saved`);
         }
       })
       .on('end', () => {
