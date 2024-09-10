@@ -7,19 +7,19 @@ This application will extract and parse data from San Francisco's food truck ope
 
 - Import data:
 ```
-curl --location 'localhost:3000/csv/parse?url=https%3A%2F%2Fdata.sfgov.org%2Fapi%2Fviews%2Frqzj-sfat%2Frows.csv'
+curl --location 'localhost:8000/csv/parse?url=https%3A%2F%2Fdata.sfgov.org%2Fapi%2Fviews%2Frqzj-sfat%2Frows.csv'
 ```
 - List all facility types:
 ```
-curl --location 'localhost:3000/csv/facility-types'
+curl --location 'localhost:8000/csv/facility-types'
 ```
 - Search for specific food:
 ```
-curl --location 'localhost:3000/csv/filter-food-items?food=burgers'
+curl --location 'localhost:8000/csv/filter-food-items?food=burgers'
 ```
 - Locate nearby food trucks based on geo localization:
 ```
-curl --location 'localhost:3000/csv/nearby-food-trucks?latitude=37.762024747895126%3Flongitude%3D-122.43969849090182&facilityType=Push%20Cart&limit=5'
+curl --location 'localhost:8000/csv/nearby-food-trucks?latitude=37.762024747895126%3Flongitude%3D-122.43969849090182&facilityType=Push%20Cart&limit=5'
 ```
 
 ## Tech
@@ -38,7 +38,7 @@ docker-compose up --build
 
 Open browser at:
 ```sh
-localhost:3000/api
+localhost:8000/api
 ```
 
 To see the swagger documentation

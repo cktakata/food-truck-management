@@ -18,7 +18,7 @@ services:
       dockerfile: Dockerfile
     container_name: ft-app
     ports:
-      - '3000:3000'
+      - '8000:8000'
     depends_on:
       - ft-mongo
     environment:

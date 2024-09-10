@@ -28,7 +28,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package*.json ./
 
 # Step 10: Expose the port that the application will run on
-EXPOSE 3000
+EXPOSE 8000
 
 # Step 11: Command to run the NestJS application
 CMD ["node", "dist/main"]
