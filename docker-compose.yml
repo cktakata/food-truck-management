@@ -22,7 +22,7 @@ services:
     depends_on:
       - ft-mongo
     environment:
-      - FRONTEND_URI=http://localhost:3001
+      - FRONTEND_URI=http://localhost:3000
       - MONGO_URI=mongodb://ft-mongo:27017
       - COLLECTION_NAME=nest
     networks:
