@@ -65,14 +65,19 @@ export class CsvService {
   }
 
   async getUniqueFacilityTypes(): Promise<string[]> {
-    return this.dataModel.distinct('FacilityType').sort();
+    const facilityTypes = await this.dataModel.distinct('FacilityType');
+    return facilityTypes.sort(); // Sort the array after retrieval
   }
 
-  async filterFoodItemsByLetter(food: string): Promise<Data[]> {
-    const regex = new RegExp(food, 'i'); // 'i' for case-insensitive search
-    return this.dataModel
+  async filterFoodItemsByLetter(letter: string): Promise<Data[]> {
+    const regex = new RegExp(letter, 'i'); // Case-insensitive regex
+    const data = await this.dataModel
       .find({ FoodItems: { $regex: regex } })
-      .sort({ FoodItems: 1 });
+      .exec(); // .exec() returns a Promise
+
+    return data.sort((a, b) =>
+      (a.FoodItems || '').localeCompare(b.FoodItems || ''),
+    );
   }
 
   async findNearbyFoodTrucks(

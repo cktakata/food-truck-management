@@ -18,10 +18,11 @@ services:
       dockerfile: Dockerfile
     container_name: ft-app
     ports:
-      - "3000:3000"
+      - '3000:3000'
     depends_on:
       - ft-mongo
     environment:
+      - FRONTEND_URI=http://localhost:3001
       - MONGO_URI=mongodb://ft-mongo:27017
       - COLLECTION_NAME=nest
     networks:
@@ -30,5 +31,4 @@ volumes:
   mongo-data:
 networks:
   ft_internal:
-    driver: 
-      bridge
+    driver: bridge
